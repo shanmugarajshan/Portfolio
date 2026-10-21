@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import './App.css';
-import photo from './assets/shan.jpg';
+import photo from './assets/shan-Neon.webp';
 import { profile, tools, skills, jobs, flow, mern, projects } from './data';
 
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
@@ -109,7 +109,6 @@ function useScrollEffects(pipeRef) {
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerout', onOut);
       cancelAnimationFrame(raf);
-      document.removeEventListener('pointerout', onOut);
       io.disconnect();
       co.disconnect();
     };
@@ -135,6 +134,9 @@ function Split({ text }) {
   );
 }
 
+// Letters shown inside the loader ring. Change them to anything short (2 to 5 letters).
+const LOADER_TEXT = 'SHAN';
+
 function Loader() {
   const [n, setN] = useState(0);
   const [phase, setPhase] = useState('load');
@@ -156,7 +158,7 @@ function Loader() {
         setPhase('out');
         document.body.classList.add('loaded');
         document.body.style.overflow = '';
-      }, 2000);
+      }, 450);
       t2 = setTimeout(() => setPhase('gone'), 1700);
     };
     raf = requestAnimationFrame(step);
@@ -175,7 +177,7 @@ function Loader() {
             <circle className="r0" cx="80" cy="80" r="76" />
             <circle className="r1" cx="80" cy="80" r="70" style={{ strokeDasharray: C, strokeDashoffset: C * (1 - n / 100) }} />
           </svg>
-          <span className="sd">SD</span>
+          <span className="sd">{LOADER_TEXT}</span>
         </div>
         <p className="pct">{n}<small>%</small></p>
         <ol className="stg">{steps.map(([t, at]) => <li key={t} className={n >= at && n > 0 ? 'on' : ''}><i /><span>{t}</span></li>)}</ol>
@@ -208,15 +210,21 @@ function Strip() {
 }
 
 function Nav({ active }) {
+  const [open, setOpen] = useState(false);
   const links = [['home', 'Home'], ...stages.map((s) => [s.id, s.title.replace(' me', '')])];
+  const current = (links.find(([id]) => id === active) || links[0])[1];
   return (
-    <header className="nav">
+    <header className={'nav' + (open ? ' open' : '')}>
       <div className="bar" />
       <nav className="pill" aria-label="Main">
-        <a href="#home" className="logo">SD</a>
-        {links.map(([id, label]) => (
-          <a key={id} href={'#' + id} className={active === id ? 'on' : ''}>{label}</a>
-        ))}
+        <button type="button" className="burger" aria-expanded={open} aria-label="Toggle menu" onClick={() => setOpen(!open)}>
+          <i className={'uil ' + (open ? 'uil-multiply' : 'uil-bars')} /><span>{current}</span>
+        </button>
+        <div className="links">
+          {links.map(([id, label]) => (
+            <a key={id} href={'#' + id} className={active === id ? 'on' : ''} onClick={() => setOpen(false)}>{label}</a>
+          ))}
+        </div>
       </nav>
     </header>
   );
@@ -420,10 +428,31 @@ function Projects() {
 
 function Contact() {
   const [f, setF] = useState({ name: '', email: '', msg: '' });
-  const send = (e) => {
+  const [st, setSt] = useState('idle');
+  const send = async (e) => {
     e.preventDefault();
-    const body = `${f.msg}\n\n— ${f.name} (${f.email})`;
-    window.location.href = `mailto:${profile.email}?subject=${encodeURIComponent('Portfolio enquiry from ' + f.name)}&body=${encodeURIComponent(body)}`;
+    setSt('sending');
+    try {
+      const r = await fetch('https://formsubmit.co/ajax/' + profile.email, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          name: f.name,
+          email: f.email,
+          message: f.msg,
+          _subject: 'Portfolio message from ' + f.name,
+          _replyto: f.email,
+          _template: 'table',
+          _captcha: 'false',
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok || String(d.success) !== 'true') throw new Error(d.message || 'failed');
+      setSt('sent');
+      setF({ name: '', email: '', msg: '' });
+    } catch (err) {
+      setSt('error');
+    }
   };
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const ways = [
@@ -446,10 +475,12 @@ function Contact() {
           ))}
         </div>
         <form className="card form" onSubmit={send} data-rv="right">
-          <label>Your name<input required value={f.name} onChange={set('name')} placeholder="Your full name" /></label>
-          <label>Your email<input required type="email" value={f.email} onChange={set('email')} placeholder="you@company.com" /></label>
-          <label>Message<textarea required rows="5" value={f.msg} onChange={set('msg')} placeholder="What do you need to ship?" /></label>
-          <button className="btn solid" type="submit">Send message</button>
+          <label htmlFor="cf-name">Your name<input id="cf-name" name="name" autoComplete="name" required value={f.name} onChange={set('name')} placeholder="Your full name" /></label>
+          <label htmlFor="cf-email">Your email<input id="cf-email" name="email" type="email" autoComplete="email" required value={f.email} onChange={set('email')} placeholder="you@company.com" /></label>
+          <label htmlFor="cf-msg">Message<textarea id="cf-msg" name="message" required rows="5" value={f.msg} onChange={set('msg')} placeholder="What do you need to ship?" /></label>
+          <button className="btn solid" type="submit" disabled={st === 'sending'}>{st === 'sending' ? 'Sending…' : 'Send message'}</button>
+          {st === 'sent' && <p className="fmsg ok" role="status">Thanks! Your message has been sent. I will reply soon.</p>}
+          {st === 'error' && <p className="fmsg bad" role="alert">Could not send. Please email me at <a href={'mailto:' + profile.email}>{profile.email}</a>.</p>}
         </form>
       </div>
     </Stage>
